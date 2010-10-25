@@ -31,7 +31,7 @@ class FrozenDictTests(TestCase):
         self.assertEqual(tuple(d.values()), ())
         self.assertEqual(tuple(d.items()), ())
         self.assertRaises(KeyError, lambda: d['a'])
-
+        self.assertFalse('a' in d)
 
     def test_emptyRoot(self):
         """
@@ -52,14 +52,16 @@ class FrozenDictTests(TestCase):
         d2 = d.withPair(k, v)
         self.assertEqual(len(d2), 1)
         self.assertEqual(d2[k], v)
+        self.assertTrue(k in d2)
         self.assertEqual(tuple(d2.keys()), (k,))
         self.assertEqual(tuple(d2.values()), (v,))
         self.assertEqual(tuple(d2.items()), ((k, v),))
         #different-hashed keys fail properly
         self.assertRaises(KeyError, lambda: d2['a'])
+        self.assertFalse('a' in d2)
         #so do same-hashed keys
         self.assertRaises(KeyError, lambda: d2[HashTester('stuff')])
-
+        self.assertFalse(HashTester('stuff') in d2)
 
     def test_duplicateAssoc(self):
         """
@@ -175,17 +177,27 @@ class FrozenDictTests(TestCase):
         """
         k1, v1 = HashTester(0), 'collision'
         d = frozendict().withPair(k1, v1)
-        vals = 'abcdefghijklmnopq'
-        for i in range(17):
+        vals = 'abcdefghijklmnopqr'
+        for i in range(18):
             d = d.withPair(i, vals[i])
-        self.assertEqual(len(d), 18)
-        self.assertEqual(set(d.items()), set([(k1, v1)] + zip(range(17), vals)))
+
+        k2, v2 = HashTester(1), 'collision'
+        d = d.withPair(k2, v2)
+        self.assertEqual(len(d), 20)
+        self.assertEqual(set(d.items()), set([(k1, v1), (k2, v2)] + zip(range(18), vals)))
         di = FrozenDictInspector(d)
         self.assertEqual(di.root.kind, 'ArrayNode')
-        self.assertEqual(di.count, 18)
+        self.assertEqual(di.count, 20)
         self.assertEqual(di.root.array[0].kind, "HashCollisionNode")
         for i in range(1, 16):
             self.assertEqual(di.root.array[i].kind, 'BitmapIndexedNode')
+
+
+        for k, v  in zip([k1, k2] + range(18), [v1, v2] + list(vals)):
+            self.assertEqual(d[k], v)
+
+        self.assertRaises(KeyError, lambda: d[20])
+        self.assertTrue(d.withPair(k2, v2) is d)
 
 
     def test_handleExtraCollision(self):

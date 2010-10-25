@@ -13,7 +13,19 @@ class frozendict(object):
     def __getitem__(self, key):
         if self.root is None:
             raise KeyError(key)
-        return self.root.find(0, hash(key), key)
+        val = self.root.find(0, hash(key), key)
+        if val is _not_found:
+            raise KeyError(key)
+        else:
+            return val
+
+
+    def __contains__(self, key):
+        if self.root is None:
+            return False
+        else:
+            return self.root.find(0, hash(key), key) is not _not_found
+
 
     def keys(self):
         if self.root is None:
@@ -59,6 +71,7 @@ class frozendict(object):
 
 
 _absent = object()
+_not_found = object()
 
 class _BitmapIndexedNode(object):
     kind = 'BitmapIndexedNode'
@@ -79,7 +92,7 @@ class _BitmapIndexedNode(object):
     def find(self, shift, keyHash, key):
         bit = bitpos(keyHash, shift)
         if (self.bitmap & bit) == 0:
-            raise KeyError(key)
+            return _not_found
         idx = index(self.bitmap, bit)
         k = self.array[2 * idx]
         v = self.array[2 * idx + 1]
@@ -88,7 +101,7 @@ class _BitmapIndexedNode(object):
         if k == key:
             return v
         else:
-            raise KeyError(key)
+            return _not_found
 
 
     def assoc(self, shift, keyHash, key, val):
@@ -172,6 +185,32 @@ class _ArrayNode(object):
                     yield item
 
 
+    def find(self, shift, keyHash, key):
+        idx = mask(keyHash, shift)
+        node = self.array[idx]
+        if node is _absent:
+            return _not_found
+        else:
+            return node.find(shift + 5, keyHash, key)
+
+
+
+    def assoc(self, shift, keyHash, key, val):
+        idx = mask(keyHash, shift)
+        node = self.array[idx]
+        if node is _absent:
+            newArray = self.array[:]
+            newArray[idx], _ = EMPTY_BITMAP_INDEXED_NODE.assoc(shift + 5, keyHash, key, val)
+            return _ArrayNode(self.count + 1, newArray), True
+        else:
+            n, addedLeaf = node.assoc(shift + 5, keyHash, key, val)
+            if n is node:
+                return self, False
+            newArray = self.array[:]
+            newArray[idx] = n
+            return _ArrayNode(self.count, newArray), addedLeaf
+
+
 
 class _HashCollisionNode(object):
     kind = "HashCollisionNode"
@@ -191,7 +230,7 @@ class _HashCollisionNode(object):
         try:
             idx = 2 * self.array[::2].index(key)
         except ValueError:
-            raise KeyError(key)
+            return _not_found
         return self.array[idx + 1]
 
 
