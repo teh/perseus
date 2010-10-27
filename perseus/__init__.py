@@ -1,9 +1,11 @@
 #XXX redo with array-edit versions since we can rely on GIL
+# __eq__ __hash__ without
 
 class frozendict(object):
     def __init__(self):
         self.root = None
         self.count = 0
+        self._hash = None
 
 
     def __len__(self):
@@ -20,11 +22,45 @@ class frozendict(object):
             return val
 
 
+    def get(self, key, default=None):
+        if self.root is None:
+            return default
+        val = self.root.find(0, hash(key), key)
+        if val is _not_found:
+            return default
+        else:
+            return val
+
+
     def __contains__(self, key):
         if self.root is None:
             return False
         else:
             return self.root.find(0, hash(key), key) is not _not_found
+
+    def __hash__(self):
+        if self._hash is not None:
+            return self._hash
+        hashval = 0x3039
+        for k, v in self.items():
+            hashval += hash(k) ^ hash(v)
+        self._hash = hashval
+        return hashval
+
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        if not self.__class__ == other.__class__:
+            return False
+        if len(self) != len(other) or hash(self) != hash(other):
+            return False
+        for k, v in self.items():
+            otherV = other.get(k, _not_found)
+            if otherV is _not_found or v != otherV:
+                print 'yes'
+                return False
+        return True
 
 
     def keys(self):
@@ -67,6 +103,25 @@ class frozendict(object):
         if addedLeaf:
             newf.count = self.count + 1
         return newf
+
+
+    def without(self, k):
+        if self.root is None:
+            return self
+        newroot = self.root.without(0, hash(k), k)
+        if newroot is self.root:
+            return self
+        else:
+            newf = frozendict()
+            newf.count = self.count - 1
+            newf.root = newroot
+            return newf
+
+
+    def __repr__(self):
+        #for today, we're straight up cheatin'
+        d = dict(self)
+        return "frozendict(%r)" % (d,)
 
 
 
@@ -135,7 +190,8 @@ class _BitmapIndexedNode(object):
                 #there was a hash collision in the local 5 bits of the bitmap
                 newArray = self.array[:]
                 newArray[2 * idx] = _absent
-                newArray[2 * idx + 1] = createNode(shift + 5, someKey, someVal, keyHash, key, val)
+                newArray[2 * idx + 1] = createNode(shift + 5, someKey,
+                                                   someVal, keyHash, key, val)
                 newNode = _BitmapIndexedNode(self.bitmap, newArray)
                 return newNode, True
         else:
@@ -145,16 +201,18 @@ class _BitmapIndexedNode(object):
                 # this node is full, convert to ArrayNode
                 nodes = [_absent] * 32
                 jdx = mask(keyHash, shift)
-                nodes[jdx], addedLeaf = EMPTY_BITMAP_INDEXED_NODE.assoc(shift + 5, keyHash, key, val)
+                nodes[jdx], addedLeaf = EMPTY_BITMAP_INDEXED_NODE.assoc(
+                    shift + 5, keyHash, key, val)
                 j = 0
                 for i in range(32):
                     if ((self.bitmap >> i) & 1) != 0:
                         if self.array[j] is _absent:
                             nodes[i] = self.array[j + 1]
                         else:
-                            nodes[i], al = EMPTY_BITMAP_INDEXED_NODE.assoc(shift + 5, hash(self.array[j]), self.array[j], self.array[j + 1])
-                            #al may always be false, i guess? not sure
-                            addedLeaf = addedLeaf or al
+                            nodes[i], al = EMPTY_BITMAP_INDEXED_NODE.assoc(
+                                shift + 5, hash(self.array[j]),
+                                self.array[j], self.array[j + 1])
+                            addedLeaf = True
                     j += 2
                 return _ArrayNode(n + 1, nodes), addedLeaf
             else:
@@ -166,6 +224,28 @@ class _BitmapIndexedNode(object):
                 return _BitmapIndexedNode(self.bitmap | bit, newArray), True
 
 
+    def without(self, shift, keyHash, key):
+        bit = bitpos(keyHash, shift)
+        if (self.bitmap & bit) == 0:
+            return self
+        idx = index(self.bitmap, bit)
+        someKey = self.array[2 * idx]
+        someVal = self.array[(2 * idx) + 1]
+        if someKey is _absent:
+            # delegate to subnode
+            n = someVal.without(shift + 5, keyHash, key)
+            if n is someVal:
+                return self
+            if n is not _absent:
+                newArray = self.array[:]
+                newArray[2 * idx + 1] = n
+                return _BitmapIndexedNode(self.bitmap, newArray)
+        if someKey == key:
+            newArray = self.array[:]
+            del newArray[2 * idx:2 * idx + 2]
+            return _BitmapIndexedNode(self.bitmap ^ bit, newArray)
+        else:
+            return self
 
 EMPTY_BITMAP_INDEXED_NODE = _BitmapIndexedNode(0, [])
 
@@ -211,6 +291,24 @@ class _ArrayNode(object):
             return _ArrayNode(self.count, newArray), addedLeaf
 
 
+    def without(self, shift, keyHash, key):
+        idx = mask(keyHash, shift)
+        node = self.array[idx]
+        if node is _absent:
+            return self
+        n = node.without(shift + 5, keyHash, key)
+        if n is node:
+            return self
+        newArray = self.array[:]
+        newArray[idx] = n
+        if n is _absent:
+            if self.count <= 8:
+                return self.pack(None, idx)
+            return _ArrayNode(self.count - 1, newArray)
+        else:
+            return _ArrayNode(self.count, newArray)
+
+
 
 class _HashCollisionNode(object):
     kind = "HashCollisionNode"
@@ -251,6 +349,22 @@ class _HashCollisionNode(object):
         else:
             # nest it in a bitmap node
             return _BitmapIndexedNode(bitpos(self.hash, shift), [_absent, self]).assoc(shift, keyHash, key, val)
+
+
+    def without(self, shift, keyHash, key):
+        try:
+            idx = 2 * self.array[::2].index(key)
+        except ValueError:
+            return self
+        else:
+            if self.count == 1:
+                return _absent
+            else:
+                newArray = self.array[:]
+                del newArray[idx:idx + 2]
+                return _HashCollisionNode(self.hash, self.count - 1, newArray)
+
+
 
 ## implementation crap
 

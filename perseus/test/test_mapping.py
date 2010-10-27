@@ -1,4 +1,4 @@
-from unittest import TestCase
+from twisted.trial.unittest import TestCase
 from perseus import frozendict
 from perseus.test._inspector import FrozenDictInspector, bitcount, index, bitpos
 
@@ -8,8 +8,10 @@ class HashTester(object):
         self.hashval = hashVal or hash(hashObj)
         self.hashObj = hashObj
 
+
     def __hash__(self):
         return self.hashval
+
 
     def __repr__(self):
         return "<HashTester hash(%s)>" % (repr(self.hashObj),)
@@ -31,7 +33,9 @@ class FrozenDictTests(TestCase):
         self.assertEqual(tuple(d.values()), ())
         self.assertEqual(tuple(d.items()), ())
         self.assertRaises(KeyError, lambda: d['a'])
+        self.assertEqual(d.get('a', 'b'), 'b')
         self.assertFalse('a' in d)
+
 
     def test_emptyRoot(self):
         """
@@ -40,6 +44,7 @@ class FrozenDictTests(TestCase):
         d = frozendict()
         di = FrozenDictInspector(d)
         self.assertEqual(di.root, None)
+
 
 
     def test_assocFromEmpty(self):
@@ -63,6 +68,7 @@ class FrozenDictTests(TestCase):
         self.assertRaises(KeyError, lambda: d2[HashTester('stuff')])
         self.assertFalse(HashTester('stuff') in d2)
 
+
     def test_duplicateAssoc(self):
         """
         The same frozendict is returned if an existing pair is added to it.
@@ -72,6 +78,7 @@ class FrozenDictTests(TestCase):
         d2 = d.withPair(k, v)
         d3 = d2.withPair(k, v)
         self.assertTrue(d2 is d3)
+
 
 
     def test_replaceAssoc(self):
@@ -195,8 +202,10 @@ class FrozenDictTests(TestCase):
 
         for k, v  in zip([k1, k2] + range(18), [v1, v2] + list(vals)):
             self.assertEqual(d[k], v)
+            self.assertEqual(d.get(k), v)
 
         self.assertRaises(KeyError, lambda: d[20])
+        self.assertEqual(d.get(20, 'x'), 'x')
         self.assertTrue(d.withPair(k2, v2) is d)
 
 
@@ -263,3 +272,77 @@ class FrozenDictTests(TestCase):
         d = frozendict().withPair(k1, v1).withPair(k1a, v1a).withPair(k2, v2)
         self.assertEqual(len(d), 3)
         self.assertEqual(set(d.items()), set([(k1, v1), (k1a, v1a), (k2, v2)]))
+
+
+    def test_hashEq(self):
+        """
+        frozendicts are hashable and compare properly for equality.
+        """
+        d0a, d0b = frozendict(), frozendict()
+        self.assertEqual(hash(d0a), hash(d0b), "empty frozendicts don't hash the same")
+        self.assertEqual(d0a, d0b, "empty frozendicts don't compare equal")
+        self.assertEqual(d0a, d0a)
+        self.assertNotEqual(d0a, {})
+
+        k1, v1 = HashTester(0), 'collision'
+        d1a = frozendict().withPair(k1, v1)
+        d1b = frozendict().withPair(k1, v1)
+        vals = 'abcdefghijklmnopqr'
+        for i in range(18):
+            d1a = d1a.withPair(i, vals[i])
+            d1b = d1b.withPair(i, vals[i])
+        k2, v2 = HashTester(1), 'collision'
+        d1a = d1a.withPair(k2, v2)
+        d1b = d1b.withPair(k2, v2)
+
+        self.assertNotEqual(d1a, d0a)
+        self.assertEqual(hash(d1a), hash(d1b), "equal frozendicts don't hash the same")
+        self.assertEqual(d1a, d1b, "equal frozendicts don't compare equal")
+        self.assertNotEqual(d1b.withPair('extra', 'pair'), d1b.withPair('extra', HashTester('pair')))
+
+
+    def test_emptyWithout(self):
+        """
+        Empty frozendicts support 'without'.
+        """
+        d = frozendict()
+        self.assertEqual(d.without('something'), d)
+
+
+    def test_bitmappedNodeWithout(self):
+        """
+        Non-full nodes support 'without'.
+        """
+        k, v = ('stuff', 42)
+        d = frozendict()
+        d2 = d.withPair(k, v)
+        self.assertEqual(d, d2.without(k))
+        self.assertEqual(d2, d2.without('nothing'))
+
+
+    def test_arrayNodeWithout(self):
+        """
+        'without' calls propagate through array nodes.
+        """
+        d = frozendict()
+        vals = 'abcdefghijklmnopq'
+        for i in range(17):
+            previousD = d
+            d = d.withPair(i, vals[i])
+        self.assertEqual(previousD, d.without(16))
+
+
+    def test_hashCollisionNodeWithout(self):
+        """
+        'without' works with hash collision nodes.
+        """
+        k1, v1 = HashTester(0), 'collision'
+        d = frozendict().withPair(k1, v1)
+        vals = 'abcdefghijklmnopqr'
+        for i in range(18):
+            d = d.withPair(i, vals[i])
+
+        k2, v2 = HashTester(1), 'collision'
+        d2 = d.withPair(k2, v2)
+
+        self.assertEqual(d2.without(k2), d)
