@@ -1,5 +1,4 @@
 #XXX redo with array-edit versions since we can rely on GIL
-# __eq__ __hash__ without
 
 class frozendict(object):
     def __init__(self):
@@ -58,9 +57,13 @@ class frozendict(object):
         for k, v in self.items():
             otherV = other.get(k, _not_found)
             if otherV is _not_found or v != otherV:
-                print 'yes'
                 return False
         return True
+
+
+    def __ne__(self, other):
+        #If you ever thought Python was good, this is where you can stop.
+        return not self.__eq__(other)
 
 
     def keys(self):
@@ -246,6 +249,8 @@ class _BitmapIndexedNode(object):
             return _BitmapIndexedNode(self.bitmap ^ bit, newArray)
         else:
             return self
+
+
 
 EMPTY_BITMAP_INDEXED_NODE = _BitmapIndexedNode(0, [])
 

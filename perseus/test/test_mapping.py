@@ -1,6 +1,7 @@
-from twisted.trial.unittest import TestCase
+from unittest import TestCase
 from perseus import frozendict
 from perseus.test._inspector import FrozenDictInspector, bitcount, index, bitpos
+import ast
 
 class HashTester(object):
 
@@ -295,11 +296,15 @@ class FrozenDictTests(TestCase):
         d1a = d1a.withPair(k2, v2)
         d1b = d1b.withPair(k2, v2)
 
-        self.assertNotEqual(d1a, d0a)
         self.assertEqual(hash(d1a), hash(d1b), "equal frozendicts don't hash the same")
-        self.assertEqual(d1a, d1b, "equal frozendicts don't compare equal")
-        self.assertNotEqual(d1b.withPair('extra', 'pair'), d1b.withPair('extra', HashTester('pair')))
 
+        #explicitly using '==' and '!=' here to avoid guessing which the assert method calls.
+        self.assertFalse(d1a == d0a)
+        self.assertTrue(d1a != d0a)
+        self.assertTrue(d1a == d1b, "equal frozendicts don't compare equal")
+        self.assertFalse(d1a != d1b)
+        self.assertFalse(d1b.withPair('extra', 'pair') == d1b.withPair('extra', HashTester('pair')))
+        self.assertTrue(d1b.withPair('extra', 'pair') != d1b.withPair('extra', HashTester('pair')))
 
     def test_emptyWithout(self):
         """
@@ -346,3 +351,17 @@ class FrozenDictTests(TestCase):
         d2 = d.withPair(k2, v2)
 
         self.assertEqual(d2.without(k2), d)
+
+
+    def test_repr(self):
+        """
+        repr() for frozendicts is congruent to repr() for dicts.
+        """
+        md = {"stuff": 1,  17: [1, 2, 'a']}
+        fd = frozendict()
+        for k, v in md.iteritems():
+            fd = fd.withPair(k, v)
+        fr = repr(fd)
+        self.assertTrue(fr.startswith("frozendict("))
+        self.assertTrue(fr.endswith(")"))
+        self.assertTrue(ast.literal_eval(fr[11:-1]), md)
