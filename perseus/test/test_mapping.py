@@ -325,6 +325,18 @@ class FrozenDictTests(TestCase):
         self.assertEqual(d2, d2.without('nothing'))
 
 
+    def test_mixedNodeWithout(self):
+        """
+        Bitmapped nodes delegate 'without' to subnodes properly.
+        """
+        k1, v1 = HashTester("stuff", 0x17), 42
+        k1a, v1a = HashTester("stuff", 0x17), 44
+        k2, v2 = HashTester("morestuff", 0x37), 43
+        d = frozendict().withPair(k1, v1).withPair(k1a, v1a).withPair(k2, v2)
+        self.assertTrue(d.without(HashTester("stuff", 0x17)) is d)
+        self.assertEqual(d.without(k1).without(k1a), frozendict().withPair(k2, v2))
+        self.assertEqual(d.without(k2).without(k1).without(k1a), frozendict())
+
     def test_arrayNodeWithout(self):
         """
         'without' calls propagate through array nodes.
@@ -335,7 +347,8 @@ class FrozenDictTests(TestCase):
             previousD = d
             d = d.withPair(i, vals[i])
         self.assertEqual(previousD, d.without(16))
-
+        self.assertTrue(d.without(HashTester(13)) is d)
+        self.assertTrue(d.without(HashTester(27)) is d)
 
     def test_hashCollisionNodeWithout(self):
         """
@@ -351,6 +364,7 @@ class FrozenDictTests(TestCase):
         d2 = d.withPair(k2, v2)
 
         self.assertEqual(d2.without(k2), d)
+        self.assertTrue(d2.without(HashTester(k1)) is d2)
 
 
     def test_repr(self):

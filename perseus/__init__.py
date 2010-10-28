@@ -112,6 +112,8 @@ class frozendict(object):
         if self.root is None:
             return self
         newroot = self.root.without(0, hash(k), k)
+        if newroot is _absent:
+            return frozendict()
         if newroot is self.root:
             return self
         else:
@@ -243,6 +245,11 @@ class _BitmapIndexedNode(object):
                 newArray = self.array[:]
                 newArray[2 * idx + 1] = n
                 return _BitmapIndexedNode(self.bitmap, newArray)
+            if self.bitmap == bit:
+                return _absent
+            newArray = self.array[:]
+            del newArray[2 * idx:2 * idx + 2]
+            return _BitmapIndexedNode(self.bitmap ^ bit, newArray)
         if someKey == key:
             newArray = self.array[:]
             del newArray[2 * idx:2 * idx + 2]
