@@ -1,7 +1,7 @@
-from unittest import TestCase
+from twisted.trial.unittest import TestCase
 from perseus import frozendict
 from perseus.test._inspector import FrozenDictInspector, bitcount, index, bitpos
-import ast
+import ast, itertools
 
 class HashTester(object):
 
@@ -81,7 +81,6 @@ class FrozenDictTests(TestCase):
         self.assertTrue(d2 is d3)
 
 
-
     def test_replaceAssoc(self):
         """
         Calling withPair with a key existing in the frozendict creates a new
@@ -115,7 +114,6 @@ class FrozenDictTests(TestCase):
         i = index(di.root.bitmap, bitpos(hash(k), 0))
         self.assertEqual(di.root.array[2*i], k)
         self.assertEqual(di.root.array[2*i+1], v)
-
 
 
     def test_nearlyFullNode(self):
@@ -160,7 +158,6 @@ class FrozenDictTests(TestCase):
             self.assertEqual(di.root.array[i].kind, 'BitmapIndexedNode')
 
 
-
     def test_handleCollision(self):
         """
         Adding a pair to frozendict whose key has the same hash value as an existing key succeeds.
@@ -176,7 +173,6 @@ class FrozenDictTests(TestCase):
         self.assertEqual(len(d3), 2)
         self.assertEqual(d3[k1], v1)
         self.assertEqual(d3[k2], v2)
-
 
 
     def test_convertCollisionToFull(self):
@@ -306,6 +302,7 @@ class FrozenDictTests(TestCase):
         self.assertFalse(d1b.withPair('extra', 'pair') == d1b.withPair('extra', HashTester('pair')))
         self.assertTrue(d1b.withPair('extra', 'pair') != d1b.withPair('extra', HashTester('pair')))
 
+
     def test_emptyWithout(self):
         """
         Empty frozendicts support 'without'.
@@ -337,6 +334,7 @@ class FrozenDictTests(TestCase):
         self.assertEqual(d.without(k1).without(k1a), frozendict().withPair(k2, v2))
         self.assertEqual(d.without(k2).without(k1).without(k1a), frozendict())
 
+
     def test_arrayNodeWithout(self):
         """
         'without' calls propagate through array nodes.
@@ -349,6 +347,7 @@ class FrozenDictTests(TestCase):
         self.assertEqual(previousD, d.without(16))
         self.assertTrue(d.without(HashTester(13)) is d)
         self.assertTrue(d.without(HashTester(27)) is d)
+
 
     def test_hashCollisionNodeWithout(self):
         """
@@ -365,6 +364,34 @@ class FrozenDictTests(TestCase):
 
         self.assertEqual(d2.without(k2), d)
         self.assertTrue(d2.without(HashTester(k1)) is d2)
+
+
+    def test_repackArrayNode(self):
+        """
+        When array nodes fall below 8 children, they're repacked into
+        bitmapped nodes.
+        """
+        d = frozendict()
+        vals = 'abcdefghijklmnopq'
+        for i in range(17):
+            d = d.withPair(i, vals[i])
+        for i in range(10):
+            d = d.without(i)
+        di = FrozenDictInspector(d)
+        self.assertEqual(bitcount(di.root.bitmap), 7)
+        self.assertEqual(di.root.kind, "BitmapIndexedNode")
+        self.assertEqual(d, frozendict(zip(itertools.count(10), list("klmnopq"))))
+
+
+    def test_withUpdate(self):
+        """
+        frozendicts can be constructed from other mappings and sequences.
+        """
+        f = frozendict([(1, 2)])
+        self.assertEqual(f, frozendict().withPair(1, 2))
+        self.assertEqual(f, frozendict({1: 2}))
+        self.assertEqual(f, frozendict([(1, 2)]))
+        self.assertEqual(f, frozendict().withUpdate({1: 2}))
 
 
     def test_repr(self):

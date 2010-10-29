@@ -1,10 +1,32 @@
 #XXX redo with array-edit versions since we can rely on GIL
 
+_absent = object()
+_not_found = object()
+
 class frozendict(object):
-    def __init__(self):
-        self.root = None
-        self.count = 0
-        self._hash = None
+    def __new__(cls, input=_absent):
+        f = super(frozendict, cls).__new__(cls)
+        f.root = None
+        f.count = 0
+        f._hash = None
+        if input is _absent:
+            return f
+        else:
+            return f.withUpdate(input)
+
+
+    def withUpdate(self, input):
+        keys = getattr(input, 'keys', None)
+        result = self
+        if keys is not None:
+            for k in input.keys():
+                result = result.withPair(k, input[k])
+        else:
+            for k, v in input:
+                result = result.withPair(k, v)
+        return result
+
+
 
 
     def __len__(self):
@@ -130,9 +152,6 @@ class frozendict(object):
 
 
 
-_absent = object()
-_not_found = object()
-
 class _BitmapIndexedNode(object):
     kind = 'BitmapIndexedNode'
     def __init__(self, bitmap, array):
@@ -218,7 +237,7 @@ class _BitmapIndexedNode(object):
                                 shift + 5, hash(self.array[j]),
                                 self.array[j], self.array[j + 1])
                             addedLeaf = True
-                    j += 2
+                        j += 2
                 return _ArrayNode(n + 1, nodes), addedLeaf
             else:
                 newArray = [_absent] * (2 * (n + 1))
@@ -251,6 +270,9 @@ class _BitmapIndexedNode(object):
             del newArray[2 * idx:2 * idx + 2]
             return _BitmapIndexedNode(self.bitmap ^ bit, newArray)
         if someKey == key:
+            if len(self.array) == 2:
+                #last pair in this node
+                return _absent
             newArray = self.array[:]
             del newArray[2 * idx:2 * idx + 2]
             return _BitmapIndexedNode(self.bitmap ^ bit, newArray)
@@ -315,10 +337,22 @@ class _ArrayNode(object):
         newArray[idx] = n
         if n is _absent:
             if self.count <= 8:
-                return self.pack(None, idx)
+                return self.pack(idx)
             return _ArrayNode(self.count - 1, newArray)
         else:
             return _ArrayNode(self.count, newArray)
+
+
+    def pack(self, idx):
+        newArray = [_absent] * (2 * (self.count - 1))
+        j = 1
+        bitmap = 0
+        for i in range(len(self.array)):
+            if i != idx and self.array[i] is not _absent:
+                newArray[j] = self.array[i]
+                bitmap |= 1 << i
+                j += 2
+        return _BitmapIndexedNode(bitmap, newArray)
 
 
 
