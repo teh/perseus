@@ -2,6 +2,11 @@ _absent = object()
 _not_found = object()
 
 
+_BITS = 5
+_SIZE = 2 ** _BITS
+_MASK = _SIZE - 1
+
+
 class _TrieNode(object):
 
     kind = None
@@ -45,7 +50,7 @@ class _BitmapIndexedNode(_TrieNode):
         k = self.array[2 * idx]
         v = self.array[2 * idx + 1]
         if k is _absent:
-            return v.find(shift + 5, keyHash, key)
+            return v.find(shift + _BITS, keyHash, key)
         if k == key:
             return v
         else:
@@ -65,7 +70,7 @@ class _BitmapIndexedNode(_TrieNode):
             someVal = self.array[2 * idx + 1]
             if someKey is _absent:
                 #value slot is a subnode
-                n, addedLeaf = someVal.assoc(shift + 5, keyHash, key, val)
+                n, addedLeaf = someVal.assoc(shift + _BITS, keyHash, key, val)
                 if n is someVal:
                     return self, False
                 else:
@@ -80,30 +85,30 @@ class _BitmapIndexedNode(_TrieNode):
                     newArray[2 * idx + 1] = val
                     return _BitmapIndexedNode(self.bitmap, newArray), False
             else:
-                #there was a hash collision in the local 5 bits of the bitmap
+                #there was a hash collision in the local _BITS bits of the bitmap
                 newArray = self.array[:]
                 newArray[2 * idx] = _absent
-                newArray[2 * idx + 1] = createNode(shift + 5, someKey,
+                newArray[2 * idx + 1] = createNode(shift + _BITS, someKey,
                                                    someVal, keyHash, key, val)
                 newNode = _BitmapIndexedNode(self.bitmap, newArray)
                 return newNode, True
         else:
             #spot for this hash is open
             n = bitcount(self.bitmap)
-            if n >= 16:
+            if n >= (_SIZE / 2):
                 # this node is full, convert to ArrayNode
-                nodes = [_absent] * 32
+                nodes = [_absent] * _SIZE
                 jdx = mask(keyHash, shift)
                 nodes[jdx], addedLeaf = EMPTY_BITMAP_INDEXED_NODE.assoc(
-                    shift + 5, keyHash, key, val)
+                    shift + _BITS, keyHash, key, val)
                 j = 0
-                for i in range(32):
+                for i in range(_SIZE):
                     if ((self.bitmap >> i) & 1) != 0:
                         if self.array[j] is _absent:
                             nodes[i] = self.array[j + 1]
                         else:
                             nodes[i], al = EMPTY_BITMAP_INDEXED_NODE.assoc(
-                                shift + 5, hash(self.array[j]),
+                                shift + _BITS, hash(self.array[j]),
                                 self.array[j], self.array[j + 1])
                             addedLeaf = True
                         j += 2
@@ -126,7 +131,7 @@ class _BitmapIndexedNode(_TrieNode):
         someVal = self.array[(2 * idx) + 1]
         if someKey is _absent:
             # delegate to subnode
-            n = someVal.without(shift + 5, keyHash, key)
+            n = someVal.without(shift + _BITS, keyHash, key)
             if n is someVal:
                 return self
             if n is not _absent:
@@ -175,7 +180,7 @@ class _ArrayNode(_TrieNode):
         if node is _absent:
             return _not_found
         else:
-            return node.find(shift + 5, keyHash, key)
+            return node.find(shift + _BITS, keyHash, key)
 
 
     def assoc(self, shift, keyHash, key, val):
@@ -183,10 +188,10 @@ class _ArrayNode(_TrieNode):
         node = self.array[idx]
         if node is _absent:
             newArray = self.array[:]
-            newArray[idx], _ = EMPTY_BITMAP_INDEXED_NODE.assoc(shift + 5, keyHash, key, val)
+            newArray[idx], _ = EMPTY_BITMAP_INDEXED_NODE.assoc(shift + _BITS, keyHash, key, val)
             return _ArrayNode(self.count + 1, newArray), True
         else:
-            n, addedLeaf = node.assoc(shift + 5, keyHash, key, val)
+            n, addedLeaf = node.assoc(shift + _BITS, keyHash, key, val)
             if n is node:
                 return self, False
             newArray = self.array[:]
@@ -199,12 +204,13 @@ class _ArrayNode(_TrieNode):
         node = self.array[idx]
         if node is _absent:
             return self
-        n = node.without(shift + 5, keyHash, key)
+        n = node.without(shift + _BITS, keyHash, key)
         if n is node:
             return self
         newArray = self.array[:]
         newArray[idx] = n
         if n is _absent:
+            # XXX: What does 8 mean?
             if self.count <= 8:
                 return self.pack(idx)
             return _ArrayNode(self.count - 1, newArray)
@@ -289,13 +295,13 @@ def createNode(shift, oldKey, oldVal, newHash, newKey, newVal):
     if oldHash == newHash:
         return _HashCollisionNode(oldHash, 2, [oldKey, oldVal, newKey, newVal])
     else:
-        # something collided in a node's 5-bit window that isn't a real hash collision.
+        # something collided in a node's _BITS-bit window that isn't a real hash collision.
         return EMPTY_BITMAP_INDEXED_NODE.assoc(shift, oldHash, oldKey, oldVal
                                      )[0].assoc(shift, newHash, newKey, newVal)[0]
 
 
 def mask(h, sh):
-    return (h >> sh) & 0x1f
+    return (h >> sh) & _MASK
 
 
 def bitpos(h, sh):
