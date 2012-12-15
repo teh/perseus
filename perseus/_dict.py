@@ -91,19 +91,13 @@ class frozendict(object):
 
 
     def keys(self):
-        if self.root is None:
-            return
-        else:
-            for k, v in self.root.iteritems():
-                yield k
+        for (k, v) in self.items():
+            yield k
 
 
     def values(self):
-        if self.root is None:
-            return
-        else:
-            for k, v in self.root.iteritems():
-                yield v
+        for (k, v) in self.items():
+            yield v
 
 
     def items(self):
