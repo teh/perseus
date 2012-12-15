@@ -5,7 +5,12 @@ from perseus._hamt import (
     )
 
 
+# XXX: Switch to under_style_names?
+# XXX: Add functions as supplements for methods?
+
 class frozendict(object):
+
+    # TODO: Docstring
 
     def __new__(cls, input=_absent):
         f = super(frozendict, cls).__new__(cls)
@@ -18,14 +23,26 @@ class frozendict(object):
             return f.withUpdate(input)
 
 
-    def withUpdate(self, input):
-        keys = getattr(input, 'keys', None)
+    def withUpdate(self, pairs):
+        """
+        Return a new frozendict with the mappings in C{pairs}.
+
+        If C{pairs} has a C{keys()} attribute, then adds C{(k, pairs[k])} for
+        all C{k} in keys.  If not, then adds C{(k, v)} for all C{(k, v)} in
+        pairs.
+        """
+        # XXX: Possible rename to withPairs
+        # XXX: Possible rename to mergeWith
+        # XXX: It must be possible to rewrite this more efficiently, without
+        # creating a new frozendict for each pair, perhaps by internally using
+        # mutation.
+        keys = getattr(pairs, 'keys', None)
         result = self
         if keys is not None:
-            for k in input.keys():
-                result = result.withPair(k, input[k])
+            for k in pairs.keys():
+                result = result.withPair(k, pairs[k])
         else:
-            for k, v in input:
+            for k, v in pairs:
                 result = result.withPair(k, v)
         return result
 
@@ -35,9 +52,7 @@ class frozendict(object):
 
 
     def __getitem__(self, key):
-        if self.root is None:
-            raise KeyError(key)
-        val = self.root.find(0, hash(key), key)
+        val = self.get(key, _not_found)
         if val is _not_found:
             raise KeyError(key)
         else:
@@ -108,6 +123,9 @@ class frozendict(object):
 
 
     def withPair(self, k, v):
+        """
+        Return a new frozendict that maps 'k' to 'v'.
+        """
         if self.root is None:
             newroot = EMPTY_BITMAP_INDEXED_NODE
         else:
@@ -127,6 +145,9 @@ class frozendict(object):
 
 
     def without(self, k):
+        """
+        Return a new frozendict without key 'k'.
+        """
         if self.root is None:
             return self
         newroot = self.root.without(0, hash(k), k)
