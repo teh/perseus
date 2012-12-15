@@ -1,7 +1,11 @@
-from twisted.trial.unittest import TestCase
+import ast
+import itertools
+
 from perseus import frozendict
 from perseus.test._inspector import FrozenDictInspector, bitcount, index, bitpos
-import ast, itertools
+
+from testtools import TestCase
+
 
 class HashTester(object):
 
