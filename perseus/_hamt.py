@@ -2,8 +2,27 @@ _absent = object()
 _not_found = object()
 
 
-class _BitmapIndexedNode(object):
+class _TrieNode(object):
+
+    kind = None
+
+    def iteritems(self):
+        raise NotImplementedError(self.iteritems)
+
+    def find(self, shift, keyHash, key):
+        raise NotImplementedError(self.find)
+
+    def assoc(self, shift, keyHash, key, val):
+        raise NotImplementedError(self.assoc)
+
+    def without(self, shift, keyHash, key):
+        raise NotImplementedError(self.without)
+
+
+class _BitmapIndexedNode(_TrieNode):
+
     kind = 'BitmapIndexedNode'
+
     def __init__(self, bitmap, array):
         self.bitmap = bitmap
         self.array = array
@@ -134,7 +153,8 @@ class _BitmapIndexedNode(object):
 EMPTY_BITMAP_INDEXED_NODE = _BitmapIndexedNode(0, [])
 
 
-class _ArrayNode(object):
+class _ArrayNode(_TrieNode):
+
     kind = "ArrayNode"
 
     def __init__(self, count, array):
@@ -156,7 +176,6 @@ class _ArrayNode(object):
             return _not_found
         else:
             return node.find(shift + 5, keyHash, key)
-
 
 
     def assoc(self, shift, keyHash, key, val):
@@ -206,7 +225,8 @@ class _ArrayNode(object):
 
 
 
-class _HashCollisionNode(object):
+class _HashCollisionNode(_TrieNode):
+
     kind = "HashCollisionNode"
 
     def __init__(self, hash, count, array):
@@ -287,6 +307,9 @@ def index(bitmap, bit):
 
 
 def bitcount(i):
+    """
+    How many bits are in a binary representation of 'i'?
+    """
     count = 0
     while i:
         i &= i - 1
