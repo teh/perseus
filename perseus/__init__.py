@@ -2,4 +2,4 @@ __all__ = [
     'frozendict',
     ]
 
-from perseus._hamt import frozendict
+from perseus._dict import frozendict
