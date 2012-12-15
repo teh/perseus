@@ -79,6 +79,7 @@ class frozendict(object):
     def __hash__(self):
         if self._hash is not None:
             return self._hash
+        # XXX: Why 0x3039?
         hashval = 0x3039
         for k, v in self.items():
             hashval += hash(k) ^ hash(v)

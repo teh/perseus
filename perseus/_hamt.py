@@ -12,15 +12,48 @@ class _TrieNode(object):
     kind = None
 
     def iteritems(self):
+        """
+        Iterate over all of the items in this node and all sub-nodes.
+
+        Yields (key, value) pairs.
+        """
         raise NotImplementedError(self.iteritems)
 
     def find(self, shift, keyHash, key):
+        """
+        Return the value for C{key}.
+
+        If C{key} is not found in this node or any sub-nodes, return
+        C{_not_found}.
+
+        @param shift: ???
+        @param keyHash: a hash of C{key}, using the same hash function that
+            it was stored with
+        @param key: the key to look for
+        """
         raise NotImplementedError(self.find)
 
     def assoc(self, shift, keyHash, key, val):
+        """
+        Return a new node that has C{key} mapped to C{val}.
+
+        @param shift: ???
+        @param keyHash: a hash of C{key}, using the same hash function that
+            it was stored with
+        @param key: the key to add
+        @param val: the value to set C{key} to
+        """
         raise NotImplementedError(self.assoc)
 
     def without(self, shift, keyHash, key):
+        """
+        Return a new node that does not have C{key}.
+
+        @param shift: ???
+        @param keyHash: a hash of C{key}, using the same hash function that
+            it was stored with
+        @param key: the key to remove
+        """
         raise NotImplementedError(self.without)
 
 
